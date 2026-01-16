@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+
+{% block title %}Gestión de Categorías{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1><i class="bi bi-tags"></i> Gestión de Categorías</h1>
+    <div>
+        <a href="{{ url_for('nueva_categoria') }}" class="btn btn-primary">
+            <i class="bi bi-plus-circle"></i> Nueva Categoría
+        </a>
+        <a href="{{ url_for('dashboard') }}" class="btn btn-secondary">
+            <i class="bi bi-arrow-left"></i> Volver
+        </a>
+    </div>
+</div>
+
+<div class="card shadow-sm">
+    <div class="card-header bg-white">
+        <h5 class="mb-0"><i class="bi bi-list"></i> Categorías Disponibles</h5>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th style="width: 50px;">Icono</th>
+                        <th>Nombre</th>
+                        <th style="width: 100px;">Color</th>
+                        <th class="text-end" style="width: 150px;">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for categoria in categorias %}
+                    <tr>
+                        <td>
+                            <i class="{{ categoria.icono }}" style="font-size: 1.5rem; color: {{ categoria.color }};"></i>
+                        </td>
+                        <td>
+                            <strong>{{ categoria.nombre }}</strong>
+                        </td>
+                        <td>
+                            <span class="badge" style="background-color: {{ categoria.color }}; color: white;">
+                                {{ categoria.color }}
+                            </span>
+                        </td>
+                        <td class="text-end">
+                            <a href="{{ url_for('editar_categoria', id=categoria.id) }}" class="btn btn-sm btn-outline-primary">
+                                <i class="bi bi-pencil"></i>
+                            </a>
+                            <form method="POST" action="{{ url_for('eliminar_categoria', id=categoria.id) }}" style="display: inline;"
+                                  onsubmit="return confirm('¿Estás seguro de eliminar esta categoría?');">
+                                <button type="submit" class="btn btn-sm btn-outline-danger">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+
+                    {% if not categorias %}
+                    <tr>
+                        <td colspan="4" class="text-center py-5">
+                            <i class="bi bi-inbox" style="font-size: 3rem; color: #ccc;"></i>
+                            <p class="text-muted mt-3">No hay categorías disponibles</p>
+                        </td>
+                    </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

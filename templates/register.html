@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+
+{% block title %}Registrarse{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center mt-5">
+    <div class="col-md-6">
+        <div class="card shadow">
+            <div class="card-body p-5">
+                <h2 class="text-center mb-4"><i class="bi bi-person-plus"></i> Crear Cuenta</h2>
+                
+                <form method="POST">
+                    <div class="mb-3">
+                        <label for="username" class="form-label">Usuario *</label>
+                        <input type="text" class="form-control" id="username" name="username" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="password" class="form-label">Contraseña *</label>
+                        <input type="password" class="form-control" id="password" name="password" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="email" class="form-label">Email (para recordatorios)</label>
+                        <input type="email" class="form-control" id="email" name="email" placeholder="tu@email.com">
+                        <small class="text-muted">Opcional - para recibir recordatorios de vencimientos</small>
+                    </div>
+                    <div class="mb-3">
+                        <label for="telefono" class="form-label">Teléfono (para WhatsApp)</label>
+                        <input type="tel" class="form-control" id="telefono" name="telefono" placeholder="+54 343 1234567">
+                        <small class="text-muted">Opcional - para recibir alertas por WhatsApp</small>
+                    </div>
+                    <button type="submit" class="btn btn-success w-100 mb-3">
+                        <i class="bi bi-person-check"></i> Crear Cuenta
+                    </button>
+                </form>
+                
+                <div class="text-center">
+                    <p class="text-muted">¿Ya tenés cuenta? <a href="{{ url_for('login') }}">Iniciá sesión acá</a></p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
