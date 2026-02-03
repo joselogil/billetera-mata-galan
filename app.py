@@ -707,13 +707,15 @@ def configuracion():
     if request.method == 'POST':
         email = request.form.get('email')
         telefono = request.form.get('telefono')
+        # Checkbox returns 'on' if checked, None if unchecked
+        recordatorios_email = 1 if request.form.get('recordatorios_email') == 'on' else 0
 
         db = get_db()
         db.execute('''
             UPDATE usuarios
-            SET email = ?, telefono = ?
+            SET email = ?, telefono = ?, recordatorios_email = ?
             WHERE id = ?
-        ''', (email, telefono, session['user_id']))
+        ''', (email, telefono, recordatorios_email, session['user_id']))
         db.commit()
         db.close()
 
@@ -725,6 +727,48 @@ def configuracion():
     db.close()
 
     return render_template('configuracion.html', user=user)
+
+@app.route('/test_reminders')
+@login_required
+def test_reminders():
+    """
+    Test route to manually trigger email reminders
+    Only for testing purposes - shows what reminders would be sent
+    """
+    try:
+        from email_config import init_mail, validate_email_config
+        from reminders import check_and_send_reminders
+
+        # Validate email config
+        is_valid, message = validate_email_config()
+        if not is_valid:
+            flash(f'Error de configuración: {message}', 'danger')
+            return redirect(url_for('dashboard'))
+
+        # Initialize mail
+        mail = init_mail(app)
+
+        # Run reminders
+        results = check_and_send_reminders(mail)
+
+        # Show results
+        if results['total_sent'] > 0:
+            flash(f'✓ {results["total_sent"]} recordatorios enviados exitosamente', 'success')
+            if results['details']['3_days']['sent'] > 0:
+                flash(f'  • {results["details"]["3_days"]["sent"]} recordatorios de 3 días antes', 'info')
+            if results['details']['due_today']['sent'] > 0:
+                flash(f'  • {results["details"]["due_today"]["sent"]} recordatorios de día de vencimiento', 'info')
+        else:
+            flash('No hay servicios que necesiten recordatorios en este momento', 'info')
+
+        if results['errors']:
+            for error in results['errors']:
+                flash(f'Error enviando recordatorio para {error["service"]}: {error["error"]}', 'warning')
+
+    except Exception as e:
+        flash(f'Error ejecutando recordatorios: {str(e)}', 'danger')
+
+    return redirect(url_for('dashboard'))
 
 if __name__ == '__main__':
     os.makedirs('database', exist_ok=True)
