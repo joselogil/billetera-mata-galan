@@ -13,7 +13,8 @@ app.secret_key = os.environ.get('SECRET_KEY', 'tu_clave_secreta_super_segura_cam
 app.config['DATABASE'] = os.environ.get('DATABASE_PATH', 'database/gastos.db')
 
 # File upload configuration
-UPLOAD_FOLDER = 'uploads/invoices'
+# Use absolute path to ensure files are saved in the right location
+UPLOAD_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'uploads', 'invoices')
 ALLOWED_EXTENSIONS = {'pdf', 'png', 'jpg', 'jpeg'}
 MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB limit
 
