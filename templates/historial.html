@@ -87,6 +87,7 @@
                         <th>Período</th>
                         <th class="text-end">Monto</th>
                         <th>Método de Pago</th>
+                        <th>Factura</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -112,12 +113,26 @@
                                 <span class="text-muted">-</span>
                             {% endif %}
                         </td>
+                        <td>
+                            {% if pago.invoice_path %}
+                                <a href="{{ url_for('download_invoice', payment_id=pago.id) }}"
+                                   class="btn btn-sm btn-outline-primary" target="_blank">
+                                    <i class="bi bi-file-earmark-pdf"></i> Ver
+                                </a>
+                            {% else %}
+                                <button class="btn btn-sm btn-outline-secondary"
+                                        data-bs-toggle="modal"
+                                        data-bs-target="#uploadInvoiceModal{{ pago.id }}">
+                                    <i class="bi bi-upload"></i> Subir
+                                </button>
+                            {% endif %}
+                        </td>
                     </tr>
                     {% endfor %}
 
                     {% if not pagos %}
                     <tr>
-                        <td colspan="6" class="text-center py-5">
+                        <td colspan="7" class="text-center py-5">
                             <i class="bi bi-inbox" style="font-size: 3rem; color: #ccc;"></i>
                             <p class="text-muted mt-3">No hay pagos registrados todavía</p>
                         </td>
@@ -128,4 +143,41 @@
         </div>
     </div>
 </div>
+
+<!-- Modals for uploading invoices -->
+{% for pago in pagos %}
+{% if not pago.invoice_path %}
+<div class="modal fade" id="uploadInvoiceModal{{ pago.id }}" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Subir Factura</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="{{ url_for('upload_invoice', payment_id=pago.id) }}"
+                  enctype="multipart/form-data">
+                <div class="modal-body">
+                    <p><strong>Servicio:</strong> {{ pago.servicio_nombre }}</p>
+                    <p><strong>Fecha:</strong> {{ pago.fecha_pago[:16] }}</p>
+                    <p><strong>Monto:</strong> ${{ pago.monto|spanish_number }}</p>
+                    <div class="mb-3">
+                        <label class="form-label">Seleccionar archivo</label>
+                        <input type="file" class="form-control" name="invoice"
+                               accept=".pdf,.png,.jpg,.jpeg" required>
+                        <small class="text-muted">PDF, JPG o PNG (máx. 5MB)</small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-upload"></i> Subir
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endfor %}
+
 {% endblock %}

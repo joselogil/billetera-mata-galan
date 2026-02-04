@@ -1,5 +1,6 @@
 from flask import Flask, render_template, request, redirect, url_for, flash, session, send_file
 from werkzeug.security import generate_password_hash, check_password_hash
+from werkzeug.utils import secure_filename
 from datetime import datetime, timedelta
 import sqlite3
 import os
@@ -10,6 +11,18 @@ from io import BytesIO
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'tu_clave_secreta_super_segura_cambiala')
 app.config['DATABASE'] = os.environ.get('DATABASE_PATH', 'database/gastos.db')
+
+# File upload configuration
+UPLOAD_FOLDER = 'uploads/invoices'
+ALLOWED_EXTENSIONS = {'pdf', 'png', 'jpg', 'jpeg'}
+MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB limit
+
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+app.config['MAX_CONTENT_LENGTH'] = MAX_FILE_SIZE
+
+def allowed_file(filename):
+    """Check if file has an allowed extension"""
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 # Decorator para rutas protegidas
 def login_required(f):
@@ -459,11 +472,46 @@ def registrar_pago(servicio_id):
 
     db = get_db()
 
-    # Registrar el pago
-    db.execute('''
+    # Registrar el pago - obtener el ID del pago insertado
+    cursor = db.execute('''
         INSERT INTO pagos (servicio_id, user_id, periodo, monto, metodo_pago)
         VALUES (?, ?, ?, ?, ?)
     ''', (servicio_id, user_id, periodo, float(monto), metodo_pago))
+
+    payment_id = cursor.lastrowid
+
+    # Handle invoice upload if present
+    if 'invoice' in request.files:
+        file = request.files['invoice']
+        if file and file.filename and allowed_file(file.filename):
+            try:
+                # Secure filename and get extension
+                filename = secure_filename(file.filename)
+                ext = filename.rsplit('.', 1)[1].lower()
+
+                # Create user directory if needed
+                user_folder = os.path.join(app.config['UPLOAD_FOLDER'], str(user_id))
+                os.makedirs(user_folder, exist_ok=True)
+
+                # Save with payment_id in filename
+                new_filename = f"{payment_id}_invoice.{ext}"
+                filepath = os.path.join(user_folder, new_filename)
+                file.save(filepath)
+
+                # Update payment record with invoice metadata
+                file_size = os.path.getsize(filepath)
+                db.execute('''
+                    UPDATE pagos
+                    SET invoice_filename = ?,
+                        invoice_path = ?,
+                        invoice_size = ?,
+                        invoice_uploaded_at = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                ''', (filename, filepath, file_size, payment_id))
+            except Exception as e:
+                # Log error but don't fail the payment
+                print(f"Error uploading invoice: {e}")
+                flash('Pago registrado pero hubo un error al subir la factura', 'warning')
 
     # Verificar si es un servicio único (one-time)
     servicio = db.execute('SELECT es_unico FROM servicios WHERE id = ?', (servicio_id,)).fetchone()
@@ -480,6 +528,108 @@ def registrar_pago(servicio_id):
         flash('Pago registrado exitosamente', 'success')
 
     return redirect(url_for('dashboard'))
+
+@app.route('/factura/<int:payment_id>')
+@login_required
+def download_invoice(payment_id):
+    """Serve invoice file for a payment"""
+    db = get_db()
+    pago = db.execute('''
+        SELECT invoice_path, invoice_filename, user_id
+        FROM pagos
+        WHERE id = ?
+    ''', (payment_id,)).fetchone()
+    db.close()
+
+    if not pago:
+        flash('Pago no encontrado', 'error')
+        return redirect(url_for('historial'))
+
+    # Security check: ensure user owns this payment
+    if pago['user_id'] != session['user_id']:
+        flash('Acceso denegado', 'error')
+        return redirect(url_for('historial'))
+
+    if not pago['invoice_path']:
+        flash('Este pago no tiene factura adjunta', 'warning')
+        return redirect(url_for('historial'))
+
+    # Serve file
+    if os.path.exists(pago['invoice_path']):
+        return send_file(
+            pago['invoice_path'],
+            as_attachment=False,
+            download_name=pago['invoice_filename']
+        )
+    else:
+        flash('Archivo no encontrado', 'error')
+        return redirect(url_for('historial'))
+
+@app.route('/factura/subir/<int:payment_id>', methods=['POST'])
+@login_required
+def upload_invoice(payment_id):
+    """Upload invoice to existing payment"""
+    db = get_db()
+    pago = db.execute('''
+        SELECT user_id, invoice_path
+        FROM pagos
+        WHERE id = ?
+    ''', (payment_id,)).fetchone()
+
+    if not pago:
+        flash('Pago no encontrado', 'error')
+        return redirect(url_for('historial'))
+
+    # Security check
+    if pago['user_id'] != session['user_id']:
+        flash('Acceso denegado', 'error')
+        return redirect(url_for('historial'))
+
+    if pago['invoice_path']:
+        flash('Este pago ya tiene una factura', 'warning')
+        return redirect(url_for('historial'))
+
+    # Handle file upload
+    if 'invoice' in request.files:
+        file = request.files['invoice']
+        if file and file.filename and allowed_file(file.filename):
+            try:
+                # Secure filename and get extension
+                filename = secure_filename(file.filename)
+                ext = filename.rsplit('.', 1)[1].lower()
+
+                # Create user directory if needed
+                user_folder = os.path.join(app.config['UPLOAD_FOLDER'], str(pago['user_id']))
+                os.makedirs(user_folder, exist_ok=True)
+
+                # Save with payment_id in filename
+                new_filename = f"{payment_id}_invoice.{ext}"
+                filepath = os.path.join(user_folder, new_filename)
+                file.save(filepath)
+
+                # Update payment record with invoice metadata
+                file_size = os.path.getsize(filepath)
+                db.execute('''
+                    UPDATE pagos
+                    SET invoice_filename = ?,
+                        invoice_path = ?,
+                        invoice_size = ?,
+                        invoice_uploaded_at = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                ''', (filename, filepath, file_size, payment_id))
+                db.commit()
+
+                flash('Factura subida exitosamente', 'success')
+            except Exception as e:
+                print(f"Error uploading invoice: {e}")
+                flash('Error al subir la factura', 'error')
+        else:
+            flash('Archivo inválido. Solo se permiten PDF, JPG, PNG', 'error')
+    else:
+        flash('No se seleccionó ningún archivo', 'error')
+
+    db.close()
+    return redirect(url_for('historial'))
 
 @app.route('/historial')
 @login_required
