@@ -632,6 +632,54 @@ def upload_invoice(payment_id):
     db.close()
     return redirect(url_for('historial'))
 
+@app.route('/factura/eliminar/<int:payment_id>', methods=['POST'])
+@login_required
+def delete_invoice(payment_id):
+    """Delete invoice from a payment"""
+    db = get_db()
+    pago = db.execute('''
+        SELECT user_id, invoice_path
+        FROM pagos
+        WHERE id = ?
+    ''', (payment_id,)).fetchone()
+
+    if not pago:
+        flash('Pago no encontrado', 'error')
+        return redirect(url_for('historial'))
+
+    # Security check
+    if pago['user_id'] != session['user_id']:
+        flash('Acceso denegado', 'error')
+        return redirect(url_for('historial'))
+
+    if not pago['invoice_path']:
+        flash('Este pago no tiene factura', 'warning')
+        return redirect(url_for('historial'))
+
+    # Delete file from filesystem
+    if os.path.exists(pago['invoice_path']):
+        try:
+            os.remove(pago['invoice_path'])
+        except Exception as e:
+            print(f"Error deleting file: {e}")
+            flash('Error al eliminar el archivo', 'error')
+            return redirect(url_for('historial'))
+
+    # Clear invoice data from database
+    db.execute('''
+        UPDATE pagos
+        SET invoice_filename = NULL,
+            invoice_path = NULL,
+            invoice_size = NULL,
+            invoice_uploaded_at = NULL
+        WHERE id = ?
+    ''', (payment_id,))
+    db.commit()
+    db.close()
+
+    flash('Factura eliminada exitosamente', 'success')
+    return redirect(url_for('historial'))
+
 @app.route('/historial')
 @login_required
 def historial():
