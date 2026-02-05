@@ -677,6 +677,156 @@ def delete_invoice(payment_id):
     db.commit()
     db.close()
 
+    flash('Comprobante eliminado exitosamente', 'success')
+    return redirect(url_for('historial'))
+
+@app.route('/factura/bill/subir/<int:payment_id>', methods=['POST'])
+@login_required
+def upload_bill(payment_id):
+    """Upload bill/invoice to a payment"""
+    db = get_db()
+    pago = db.execute('''
+        SELECT user_id, bill_path
+        FROM pagos
+        WHERE id = ?
+    ''', (payment_id,)).fetchone()
+
+    if not pago:
+        flash('Pago no encontrado', 'error')
+        return redirect(url_for('historial'))
+
+    # Security check
+    if pago['user_id'] != session['user_id']:
+        flash('Acceso denegado', 'error')
+        return redirect(url_for('historial'))
+
+    if pago['bill_path']:
+        flash('Este pago ya tiene una factura', 'warning')
+        return redirect(url_for('historial'))
+
+    # Handle file upload
+    if 'bill' in request.files:
+        file = request.files['bill']
+        if file and file.filename and allowed_file(file.filename):
+            try:
+                # Secure filename and get extension
+                filename = secure_filename(file.filename)
+                ext = filename.rsplit('.', 1)[1].lower()
+
+                # Create user directory if needed
+                user_folder = os.path.join(app.config['UPLOAD_FOLDER'], str(pago['user_id']))
+                os.makedirs(user_folder, exist_ok=True)
+
+                # Save with payment_id in filename
+                new_filename = f"{payment_id}_bill.{ext}"
+                filepath = os.path.join(user_folder, new_filename)
+                file.save(filepath)
+
+                # Update payment record with bill metadata
+                file_size = os.path.getsize(filepath)
+                db.execute('''
+                    UPDATE pagos
+                    SET bill_filename = ?,
+                        bill_path = ?,
+                        bill_size = ?,
+                        bill_uploaded_at = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                ''', (filename, filepath, file_size, payment_id))
+                db.commit()
+
+                flash('Factura subida exitosamente', 'success')
+            except Exception as e:
+                print(f"Error uploading bill: {e}")
+                flash('Error al subir la factura', 'error')
+        else:
+            flash('Archivo inválido. Solo se permiten PDF, JPG, PNG', 'error')
+    else:
+        flash('No se seleccionó ningún archivo', 'error')
+
+    db.close()
+    return redirect(url_for('historial'))
+
+@app.route('/factura/bill/<int:payment_id>')
+@login_required
+def download_bill(payment_id):
+    """Serve bill/invoice file for a payment"""
+    db = get_db()
+    pago = db.execute('''
+        SELECT bill_path, bill_filename, user_id
+        FROM pagos
+        WHERE id = ?
+    ''', (payment_id,)).fetchone()
+    db.close()
+
+    if not pago:
+        flash('Pago no encontrado', 'error')
+        return redirect(url_for('historial'))
+
+    # Security check: ensure user owns this payment
+    if pago['user_id'] != session['user_id']:
+        flash('Acceso denegado', 'error')
+        return redirect(url_for('historial'))
+
+    if not pago['bill_path']:
+        flash('Este pago no tiene factura adjunta', 'warning')
+        return redirect(url_for('historial'))
+
+    # Serve file
+    if os.path.exists(pago['bill_path']):
+        return send_file(
+            pago['bill_path'],
+            as_attachment=False,
+            download_name=pago['bill_filename']
+        )
+    else:
+        flash('Archivo no encontrado', 'error')
+        return redirect(url_for('historial'))
+
+@app.route('/factura/bill/eliminar/<int:payment_id>', methods=['POST'])
+@login_required
+def delete_bill(payment_id):
+    """Delete bill/invoice from a payment"""
+    db = get_db()
+    pago = db.execute('''
+        SELECT user_id, bill_path
+        FROM pagos
+        WHERE id = ?
+    ''', (payment_id,)).fetchone()
+
+    if not pago:
+        flash('Pago no encontrado', 'error')
+        return redirect(url_for('historial'))
+
+    # Security check
+    if pago['user_id'] != session['user_id']:
+        flash('Acceso denegado', 'error')
+        return redirect(url_for('historial'))
+
+    if not pago['bill_path']:
+        flash('Este pago no tiene factura', 'warning')
+        return redirect(url_for('historial'))
+
+    # Delete file from filesystem
+    if os.path.exists(pago['bill_path']):
+        try:
+            os.remove(pago['bill_path'])
+        except Exception as e:
+            print(f"Error deleting bill file: {e}")
+            flash('Error al eliminar el archivo', 'error')
+            return redirect(url_for('historial'))
+
+    # Clear bill data from database
+    db.execute('''
+        UPDATE pagos
+        SET bill_filename = NULL,
+            bill_path = NULL,
+            bill_size = NULL,
+            bill_uploaded_at = NULL
+        WHERE id = ?
+    ''', (payment_id,))
+    db.commit()
+    db.close()
+
     flash('Factura eliminada exitosamente', 'success')
     return redirect(url_for('historial'))
 
