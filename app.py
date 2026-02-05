@@ -512,6 +512,39 @@ def registrar_pago(servicio_id):
             except Exception as e:
                 # Log error but don't fail the payment
                 print(f"Error uploading invoice: {e}")
+                flash('Pago registrado pero hubo un error al subir el comprobante', 'warning')
+
+    # Handle bill upload if present
+    if 'bill' in request.files:
+        file = request.files['bill']
+        if file and file.filename and allowed_file(file.filename):
+            try:
+                # Secure filename and get extension
+                filename = secure_filename(file.filename)
+                ext = filename.rsplit('.', 1)[1].lower()
+
+                # Create user directory if needed
+                user_folder = os.path.join(app.config['UPLOAD_FOLDER'], str(user_id))
+                os.makedirs(user_folder, exist_ok=True)
+
+                # Save with payment_id in filename
+                new_filename = f"{payment_id}_bill.{ext}"
+                filepath = os.path.join(user_folder, new_filename)
+                file.save(filepath)
+
+                # Update payment record with bill metadata
+                file_size = os.path.getsize(filepath)
+                db.execute('''
+                    UPDATE pagos
+                    SET bill_filename = ?,
+                        bill_path = ?,
+                        bill_size = ?,
+                        bill_uploaded_at = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                ''', (filename, filepath, file_size, payment_id))
+            except Exception as e:
+                # Log error but don't fail the payment
+                print(f"Error uploading bill: {e}")
                 flash('Pago registrado pero hubo un error al subir la factura', 'warning')
 
     # Verificar si es un servicio único (one-time)

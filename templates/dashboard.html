@@ -216,12 +216,20 @@
                                                    value="{{ servicio.medio_pago or '' }}">
                                         </div>
                                         <div class="mb-3">
+                                            <label for="bill{{ servicio.id }}" class="form-label">
+                                                <i class="bi bi-file-earmark-text"></i> Adjuntar factura/bill (opcional)
+                                            </label>
+                                            <input type="file" class="form-control" id="bill{{ servicio.id }}"
+                                                   name="bill" accept=".pdf,.png,.jpg,.jpeg">
+                                            <small class="text-muted">La factura que recibís del proveedor</small>
+                                        </div>
+                                        <div class="mb-3">
                                             <label for="invoice{{ servicio.id }}" class="form-label">
-                                                <i class="bi bi-file-earmark-pdf"></i> Adjuntar factura (opcional)
+                                                <i class="bi bi-receipt"></i> Adjuntar comprobante (opcional)
                                             </label>
                                             <input type="file" class="form-control" id="invoice{{ servicio.id }}"
                                                    name="invoice" accept=".pdf,.png,.jpg,.jpeg">
-                                            <small class="text-muted">Formatos: PDF, JPG, PNG (máx. 5MB)</small>
+                                            <small class="text-muted">Tu comprobante de pago</small>
                                         </div>
                                     </div>
                                     <div class="modal-footer">
